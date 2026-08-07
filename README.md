@@ -30,6 +30,9 @@
   <a href="https://clickhouse.com/">
     <img src="https://img.shields.io/badge/warehouse-ClickHouse-FFCC01?logo=clickhouse&logoColor=black" alt="ClickHouse warehouse" />
   </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-Apache--2.0-D22128?logo=apache&logoColor=white" alt="Apache License 2.0" />
+  </a>
 </p>
 
 Portable Data Platform is a complete reference implementation for teams that
@@ -506,9 +509,9 @@ URLs, or generated runtime data.
 
 ## License
 
-This repository does not yet declare an open-source license. Choose and add a
-`LICENSE` file before publishing the repository or accepting external
-contributions.
+Licensed under the [Apache License 2.0](LICENSE).
+
+Copyright 2026 The Portable Data Platform Authors.
 
 ---
 
