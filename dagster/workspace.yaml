@@ -1,0 +1,5 @@
+load_from:
+  - grpc_server:
+      host: platform-code
+      port: 4000
+      location_name: portable_data_platform

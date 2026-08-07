@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: customer_activity
+    description: One row per customer with cross-source activity and order metrics.
+    columns:
+      - name: customer_id
+        data_tests: [not_null, unique]
+      - name: lifetime_value
+        data_tests:
+          - not_null

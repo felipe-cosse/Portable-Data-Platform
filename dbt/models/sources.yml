@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: local_demo
+    schema: "{{ env_var('CLICKHOUSE_DB', 'analytics') }}"
+    tables:
+      - name: customers
+        identifier: raw_local_demo___customers
+        columns:
+          - name: customer_id
+            data_tests: [not_null]
+      - name: events
+        identifier: raw_local_demo___events
+        columns:
+          - name: event_id
+            data_tests: [not_null]
+      - name: orders
+        identifier: raw_local_demo___orders
+        columns:
+          - name: order_id
+            data_tests: [not_null]

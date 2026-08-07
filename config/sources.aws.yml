@@ -1,0 +1,75 @@
+version: 1
+
+sources:
+  # A deterministic first-run asset verifies the complete stack after boot.
+  - name: local_demo
+    type: filesystem
+    enabled: true
+    dataset: raw_local_demo
+    write_disposition: replace
+    bucket_url: /opt/data-platform/data/inbox
+    tables:
+      - name: customers
+        file_glob: customers.csv
+        format: csv
+      - name: events
+        file_glob: events.json
+        format: json
+      - name: orders
+        file_glob: orders.parquet
+        format: parquet
+
+  # Enable after placing files below s3://<terraform bucket>/landing/.
+  # Authentication uses the EC2 instance role; no AWS keys are required.
+  - name: aws_s3_landing
+    type: filesystem
+    enabled: false
+    dataset: raw_s3_landing
+    write_disposition: append
+    bucket_url: s3://${DATA_LAKE_BUCKET}/landing
+    tables:
+      - name: events
+        file_glob: events/**/*.jsonl
+        format: jsonl
+      - name: orders
+        file_glob: orders/**/*.parquet
+        format: parquet
+
+  # External databases can be in RDS, another VPC, or on-premises through VPN.
+  - name: external_postgres
+    type: database
+    enabled: false
+    dataset: raw_postgres
+    write_disposition: append
+    engine: postgresql
+    credentials_env: SOURCE_POSTGRES_URL
+    schema: public
+    table_names: [replace_me]
+    backend: pyarrow
+
+  - name: external_mysql
+    type: database
+    enabled: false
+    dataset: raw_mysql
+    write_disposition: append
+    engine: mysql
+    credentials_env: SOURCE_MYSQL_URL
+    table_names: [replace_me]
+    backend: pyarrow
+
+  - name: external_api
+    type: api
+    enabled: false
+    dataset: raw_api
+    write_disposition: append
+    base_url: https://api.example.com/v1/
+    auth:
+      type: bearer
+      token: ${EXAMPLE_API_TOKEN}
+    paginator:
+      type: header_link
+      links_next_key: next
+    resources:
+      - name: records
+        endpoint:
+          path: records

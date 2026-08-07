@@ -1,0 +1,24 @@
+version: 1
+
+# Used with `docker compose --profile demo` to exercise both SQL connectors.
+sources:
+  - name: postgres_demo
+    type: database
+    enabled: true
+    dataset: raw_postgres
+    write_disposition: replace
+    engine: postgresql
+    credentials_env: SOURCE_POSTGRES_URL
+    schema: public
+    table_names: [orders]
+    backend: pyarrow
+
+  - name: mysql_demo
+    type: database
+    enabled: true
+    dataset: raw_mysql
+    write_disposition: replace
+    engine: mysql
+    credentials_env: SOURCE_MYSQL_URL
+    table_names: [products]
+    backend: pyarrow

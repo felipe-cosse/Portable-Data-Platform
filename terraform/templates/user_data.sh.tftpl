@@ -1,0 +1,101 @@
+#!/bin/bash
+set -Eeuo pipefail
+exec > >(tee /var/log/data-platform-bootstrap.log | logger -t data-platform-bootstrap -s 2>/dev/console) 2>&1
+
+AWS_REGION="${aws_region}"
+ARTIFACT_BUCKET="${artifact_bucket}"
+ARTIFACT_KEY="${artifact_key}"
+COMPOSE_VERSION="${compose_version}"
+PLATFORM_SECRET_ID="${secret_id}"
+PLATFORM_DIR="/opt/data-platform"
+
+dnf update -y
+dnf install -y docker curl jq unzip
+systemctl enable --now docker
+
+case "$(uname -m)" in
+  aarch64)
+    compose_arch="aarch64"
+    ;;
+  x86_64)
+    compose_arch="x86_64"
+    ;;
+  *)
+    echo "Unsupported architecture: $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+compose_base_url="https://github.com/docker/compose/releases/download/$${COMPOSE_VERSION}"
+compose_asset="docker-compose-linux-$${compose_arch}"
+curl -fsSL "$${compose_base_url}/$${compose_asset}" -o "/tmp/$${compose_asset}"
+curl -fsSL "$${compose_base_url}/checksums.txt" -o /tmp/compose-checksums.txt
+(
+  cd /tmp
+  grep " \*$${compose_asset}$" compose-checksums.txt | sha256sum -c -
+)
+install -D -m 0755 "/tmp/$${compose_asset}" /usr/local/lib/docker/cli-plugins/docker-compose
+
+install -d -m 0750 "$${PLATFORM_DIR}"
+aws s3 cp "s3://$${ARTIFACT_BUCKET}/$${ARTIFACT_KEY}" /tmp/platform-bundle.zip
+unzip -oq /tmp/platform-bundle.zip -d "$${PLATFORM_DIR}"
+chown -R root:root "$${PLATFORM_DIR}"
+
+secret_json="$(aws secretsmanager get-secret-value \
+  --region "$${AWS_REGION}" \
+  --secret-id "$${PLATFORM_SECRET_ID}" \
+  --query SecretString \
+  --output text)"
+
+jq -r --arg bucket "$${ARTIFACT_BUCKET}" --arg region "$${AWS_REGION}" '
+  [
+    "CLICKHOUSE_HOST=clickhouse",
+    "CLICKHOUSE_PORT=9000",
+    "CLICKHOUSE_HTTP_PORT=8123",
+    "CLICKHOUSE_SECURE=0",
+    "CLICKHOUSE_DB=\(.clickhouse_database)",
+    "CLICKHOUSE_USER=\(.clickhouse_user)",
+    "CLICKHOUSE_PASSWORD=\(.clickhouse_password)",
+    "DAGSTER_PG_HOST=dagster-postgres",
+    "DAGSTER_PG_PORT=5432",
+    "DAGSTER_PG_DB=\(.dagster_pg_database)",
+    "DAGSTER_PG_USER=\(.dagster_pg_user)",
+    "DAGSTER_PG_PASSWORD=\(.dagster_pg_password)",
+    "SOURCE_POSTGRES_URL=\(.source_postgres_url)",
+    "SOURCE_MYSQL_URL=\(.source_mysql_url)",
+    "EXAMPLE_API_TOKEN=\(.example_api_token)",
+    "SOURCE_CONFIG_PATH=/opt/data-platform/config/sources.aws.yml",
+    "DLT_PIPELINES_DIR=/opt/dagster/dlt",
+    "DLT_TELEMETRY=false",
+    "DBT_PROJECT_DIR=/opt/data-platform/dbt",
+    "DBT_PROFILES_DIR=/opt/data-platform/dbt",
+    "DBT_TARGET=aws",
+    "DATA_LAKE_BUCKET=\($bucket)",
+    "AWS_DEFAULT_REGION=\($region)"
+  ] | .[]
+' <<<"$${secret_json}" > "$${PLATFORM_DIR}/.env"
+chmod 0600 "$${PLATFORM_DIR}/.env"
+unset secret_json
+
+cat >/etc/systemd/system/data-platform.service <<'UNIT'
+[Unit]
+Description=Portable data platform
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/data-platform
+ExecStart=/usr/bin/docker compose --env-file .env up -d --build
+ExecStop=/usr/bin/docker compose --env-file .env down
+TimeoutStartSec=1800
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now data-platform.service

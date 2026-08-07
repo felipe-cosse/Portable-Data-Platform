@@ -1,0 +1,216 @@
+name: portable-data-platform
+
+x-platform-common: &platform-common
+  build:
+    context: .
+  image: portable-data-platform:local
+  env_file:
+    - .env
+  environment:
+    DAGSTER_HOME: /opt/data-platform/dagster
+  volumes:
+    - ./config:/opt/data-platform/config:ro
+    - ./dbt:/opt/data-platform/dbt:ro
+    - ./data:/opt/data-platform/data:ro
+    - dagster-storage:/opt/dagster
+    - dbt-logs:/opt/data-platform/dbt/logs
+    - dbt-target:/opt/data-platform/dbt/target
+  networks:
+    - data-platform
+  restart: unless-stopped
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8-alpine
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - clickhouse-logs:/var/log/clickhouse-server
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "clickhouse-client --user=$${CLICKHOUSE_USER} --password=$${CLICKHOUSE_PASSWORD} --query 'SELECT 1' >/dev/null",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    networks:
+      - data-platform
+    restart: unless-stopped
+
+  dagster-postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DAGSTER_PG_DB}
+      POSTGRES_USER: ${DAGSTER_PG_USER}
+      POSTGRES_PASSWORD: ${DAGSTER_PG_PASSWORD}
+    volumes:
+      - dagster-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - data-platform
+    restart: unless-stopped
+
+  platform-code:
+    <<: *platform-common
+    command:
+      [
+        "dagster",
+        "api",
+        "grpc",
+        "-m",
+        "data_platform.definitions",
+        "-h",
+        "0.0.0.0",
+        "-p",
+        "4000",
+      ]
+    healthcheck:
+      test: ["CMD", "dagster", "api", "grpc-health-check", "-p", "4000"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      dagster-postgres:
+        condition: service_healthy
+
+  dagster-webserver:
+    <<: *platform-common
+    command:
+      [
+        "dagster-webserver",
+        "-h",
+        "0.0.0.0",
+        "-p",
+        "3000",
+        "-w",
+        "/opt/data-platform/dagster/workspace.yaml",
+      ]
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      platform-code:
+        condition: service_healthy
+      dagster-postgres:
+        condition: service_healthy
+
+  dagster-daemon:
+    <<: *platform-common
+    command:
+      [
+        "dagster-daemon",
+        "run",
+        "-w",
+        "/opt/data-platform/dagster/workspace.yaml",
+      ]
+    depends_on:
+      platform-code:
+        condition: service_healthy
+      dagster-postgres:
+        condition: service_healthy
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    profiles: ["local"]
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minio}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-local-minio-password}
+    ports:
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - data-platform
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    profiles: ["local"]
+    entrypoint: ["/bin/sh", "/bootstrap/create-bucket.sh"]
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minio}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-local-minio-password}
+      DATA_LAKE_BUCKET: ${DATA_LAKE_BUCKET}
+    volumes:
+      - ./infra/minio:/bootstrap:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - data-platform
+    restart: "no"
+
+  source-postgres:
+    image: postgres:17-alpine
+    profiles: ["demo"]
+    environment:
+      POSTGRES_DB: source
+      POSTGRES_USER: source
+      POSTGRES_PASSWORD: source
+    volumes:
+      - ./infra/demo/postgres:/docker-entrypoint-initdb.d:ro
+      - source-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U source -d source"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - data-platform
+
+  source-mysql:
+    image: mysql:8.4
+    profiles: ["demo"]
+    environment:
+      MYSQL_DATABASE: source
+      MYSQL_USER: source
+      MYSQL_PASSWORD: source
+      MYSQL_ROOT_PASSWORD: local-root-only
+    volumes:
+      - ./infra/demo/mysql:/docker-entrypoint-initdb.d:ro
+      - source-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-usource", "-psource"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    networks:
+      - data-platform
+
+networks:
+  data-platform:
+    driver: bridge
+
+volumes:
+  clickhouse-data:
+  clickhouse-logs:
+  dagster-postgres-data:
+  dagster-storage:
+  dbt-logs:
+  dbt-target:
+  minio-data:
+  source-postgres-data:
+  source-mysql-data:

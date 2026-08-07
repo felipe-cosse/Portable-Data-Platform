@@ -1,0 +1,15 @@
+{
+  "config": {
+    "MD013": false,
+    "MD033": {
+      "allowed_elements": [
+        "a",
+        "br",
+        "h1",
+        "img",
+        "p"
+      ]
+    },
+    "MD041": false
+  }
+}

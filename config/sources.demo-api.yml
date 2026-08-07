@@ -1,0 +1,19 @@
+version: 1
+
+# Public, read-only API integration test; no token is required.
+sources:
+  - name: jsonplaceholder_demo
+    type: api
+    enabled: true
+    dataset: raw_api_demo
+    write_disposition: replace
+    base_url: https://jsonplaceholder.typicode.com/
+    paginator:
+      type: single_page
+    resources:
+      - name: posts
+        endpoint:
+          path: posts
+      - name: comments
+        endpoint:
+          path: comments

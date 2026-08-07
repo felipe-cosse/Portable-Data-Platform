@@ -1,0 +1,23 @@
+.env
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*.duckdb
+*.log
+
+# Dagster, dlt, and dbt runtime state
+.dagster/
+.dlt/
+dbt/logs/*
+!dbt/logs/.gitkeep
+dbt/target/*
+!dbt/target/.gitkeep
+
+# Terraform local state and generated deployment bundle
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfplan
+terraform/platform-bundle.zip

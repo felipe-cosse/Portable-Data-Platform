@@ -1,0 +1,11 @@
+.git
+.env
+.pytest_cache
+.ruff_cache
+**/__pycache__
+**/*.pyc
+terraform/.terraform
+terraform/*.tfstate*
+terraform/platform-bundle.zip
+dbt/logs
+dbt/target

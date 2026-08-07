@@ -1,0 +1,93 @@
+version: 1
+
+# Only enabled sources become Dagster assets. Secrets are referenced through
+# environment variables and are expanded only for enabled sources.
+sources:
+  - name: local_demo
+    type: filesystem
+    enabled: true
+    dataset: raw_local_demo
+    write_disposition: replace
+    bucket_url: /opt/data-platform/data/inbox
+    tables:
+      - name: customers
+        file_glob: customers.csv
+        format: csv
+      - name: events
+        file_glob: events.json
+        format: json
+      - name: orders
+        file_glob: orders.parquet
+        format: parquet
+
+  # The same connector reads CSV, JSON/JSONL, and Parquet from AWS S3 or MinIO.
+  # In AWS, omit credentials to use the EC2 instance role.
+  - name: s3_landing
+    type: filesystem
+    enabled: false
+    dataset: raw_s3_landing
+    write_disposition: append
+    bucket_url: s3://${DATA_LAKE_BUCKET}/landing
+    tables:
+      - name: s3_events
+        file_glob: events/**/*.jsonl
+        format: jsonl
+      - name: s3_orders
+        file_glob: orders/**/*.parquet
+        format: parquet
+
+  # For local MinIO, enable this source and retain the credentials mapping.
+  # Do not use static credentials in AWS; use the instance role instead.
+  - name: minio_landing
+    type: filesystem
+    enabled: false
+    dataset: raw_minio_landing
+    bucket_url: s3://${DATA_LAKE_BUCKET}/landing
+    credentials:
+      aws_access_key_id: ${AWS_ACCESS_KEY_ID}
+      aws_secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+      endpoint_url: ${S3_ENDPOINT_URL}
+    tables:
+      - name: minio_files
+        file_glob: "**/*.parquet"
+        format: parquet
+
+  - name: postgres_demo
+    type: database
+    enabled: false
+    dataset: raw_postgres
+    write_disposition: replace
+    engine: postgresql
+    credentials_env: SOURCE_POSTGRES_URL
+    schema: public
+    table_names: [orders]
+    backend: pyarrow
+    chunk_size: 50000
+
+  - name: mysql_demo
+    type: database
+    enabled: false
+    dataset: raw_mysql
+    write_disposition: replace
+    engine: mysql
+    credentials_env: SOURCE_MYSQL_URL
+    table_names: [products]
+    backend: pyarrow
+    chunk_size: 50000
+
+  # Declarative API example. Add endpoints in YAML; no connector code is needed.
+  - name: example_api
+    type: api
+    enabled: false
+    dataset: raw_example_api
+    write_disposition: replace
+    base_url: https://jsonplaceholder.typicode.com/
+    paginator:
+      type: single_page
+    resources:
+      - name: posts
+        endpoint:
+          path: posts
+      - name: comments
+        endpoint:
+          path: comments

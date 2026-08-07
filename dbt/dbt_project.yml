@@ -1,0 +1,18 @@
+name: portable_data_platform
+version: "1.0.0"
+config-version: 2
+
+profile: portable_data_platform
+
+model-paths: ["models"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  portable_data_platform:
+    staging:
+      +materialized: view
+      +tags: ["staging"]
+    marts:
+      +materialized: table
+      +tags: ["mart"]

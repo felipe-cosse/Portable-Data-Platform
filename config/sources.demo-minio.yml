@@ -1,0 +1,18 @@
+version: 1
+
+# Local S3-compatible integration test. MinIO is started by the `local` profile.
+sources:
+  - name: minio_demo
+    type: filesystem
+    enabled: true
+    dataset: raw_minio
+    write_disposition: replace
+    bucket_url: s3://${DATA_LAKE_BUCKET}/landing
+    credentials:
+      aws_access_key_id: ${AWS_ACCESS_KEY_ID}
+      aws_secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+      endpoint_url: ${S3_ENDPOINT_URL}
+    tables:
+      - name: orders
+        file_glob: "**/*.parquet"
+        format: parquet

@@ -1,0 +1,4 @@
+customer_id,name,segment,created_at
+1,Ada Lovelace,enterprise,2026-07-01T09:00:00Z
+2,Grace Hopper,small_business,2026-07-03T11:30:00Z
+3,Katherine Johnson,enterprise,2026-07-05T16:45:00Z
