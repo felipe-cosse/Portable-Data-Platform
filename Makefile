@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 COMPOSE := docker compose --env-file .env
 
-.PHONY: bootstrap demo-data bundle-ready up down demo-up logs ps ingest dbt-build query test lint validate terraform-fmt terraform-validate
+.PHONY: bootstrap demo-data bundle-ready up down demo-up bi-up metabase-provision logs bi-logs ps ingest dbt-build query test lint validate smoke bi-smoke terraform-fmt terraform-validate
 
 bootstrap:
 	@test -f .env || cp .env.example .env
@@ -26,14 +26,25 @@ demo-up: bootstrap
 	$(MAKE) demo-data
 	$(COMPOSE) --profile local --profile demo up -d
 
+bi-up: bootstrap
+	$(COMPOSE) build
+	$(MAKE) demo-data
+	$(COMPOSE) --profile local --profile bi up -d
+
+metabase-provision: bootstrap
+	PYTHONPATH=src python3 -m data_platform.metabase_provision --env-file .env
+
 down:
-	$(COMPOSE) --profile local --profile demo down
+	$(COMPOSE) --profile local --profile demo --profile bi down
 
 logs:
 	$(COMPOSE) logs -f --tail=200
 
+bi-logs:
+	$(COMPOSE) --profile bi logs -f --tail=200 metabase metabase-postgres metabase-clickhouse-init
+
 ps:
-	$(COMPOSE) --profile local --profile demo ps
+	$(COMPOSE) --profile local --profile demo --profile bi ps
 
 ingest:
 	$(COMPOSE) exec dagster-daemon dagster asset materialize --select 'group:ingestion' -m data_platform.definitions
@@ -50,6 +61,12 @@ test:
 lint:
 	python3 -m ruff check src tests scripts
 
+smoke:
+	sh scripts/smoke_test.sh
+
+bi-smoke:
+	CHECK_METABASE=1 sh scripts/smoke_test.sh
+
 terraform-fmt:
 	terraform -chdir=terraform fmt -recursive -check
 
@@ -57,6 +74,6 @@ terraform-validate:
 	terraform -chdir=terraform validate
 
 validate:
-	$(COMPOSE) --profile local --profile demo config --quiet
+	$(COMPOSE) --profile local --profile demo --profile bi config --quiet
 	python3 -m compileall -q src tests scripts
 	terraform -chdir=terraform fmt -recursive -check

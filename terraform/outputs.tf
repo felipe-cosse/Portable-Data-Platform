@@ -29,6 +29,17 @@ output "dagster_port_forward_command" {
   ])
 }
 
+output "metabase_port_forward_command" {
+  description = "Forward local port 3001 to Metabase when enable_metabase is true."
+  value = var.enable_metabase ? join(" ", [
+    "aws ssm start-session",
+    "--region ${var.aws_region}",
+    "--target ${aws_instance.platform.id}",
+    "--document-name AWS-StartPortForwardingSession",
+    "--parameters 'portNumber=3001,localPortNumber=3001'",
+  ]) : null
+}
+
 output "bootstrap_log_command" {
   description = "Inspect first-boot deployment logs."
   value       = "aws ssm start-session --region ${var.aws_region} --target ${aws_instance.platform.id} --document-name AWS-StartInteractiveCommand --parameters command='sudo tail -n 200 /var/log/data-platform-bootstrap.log'"

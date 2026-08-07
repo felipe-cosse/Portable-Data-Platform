@@ -11,7 +11,7 @@
 <p align="center">
   A compact, source-agnostic analytics platform for local development and AWS.<br />
   Ingest with dlt, orchestrate with Dagster, store in ClickHouse, transform with dbt,
-  and explore files with DuckDB.
+  explore files with DuckDB, and serve insights with Metabase.
 </p>
 
 <p align="center">
@@ -29,6 +29,9 @@
   </a>
   <a href="https://clickhouse.com/">
     <img src="https://img.shields.io/badge/warehouse-ClickHouse-FFCC01?logo=clickhouse&logoColor=black" alt="ClickHouse warehouse" />
+  </a>
+  <a href="https://www.metabase.com/">
+    <img src="https://img.shields.io/badge/BI-Metabase-509EE3?logo=metabase&logoColor=white" alt="Metabase business intelligence" />
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-Apache--2.0-D22128?logo=apache&logoColor=white" alt="Apache License 2.0" />
@@ -59,6 +62,7 @@ tested analytical models:
 - **Version-controlled SQL transformations** and data-quality tests.
 - **Identical application topology** for local Docker and AWS.
 - **Embedded file analytics** with DuckDB—no additional server required.
+- **Optional self-service BI** with Metabase and read-only warehouse access.
 - **No public AWS ingress**; operational access uses Systems Manager.
 
 ## Architecture
@@ -81,6 +85,7 @@ flowchart LR
         ClickHouse["ClickHouse<br/>analytical storage"]
         Dbt["dbt<br/>models · tests"]
         Marts["Analytics marts"]
+        Metabase["Metabase<br/>questions · dashboards"]
     end
 
     DuckDB["DuckDB<br/>embedded file queries"]
@@ -93,6 +98,7 @@ flowchart LR
     Dlt --> ClickHouse
     ClickHouse --> Dbt
     Dbt --> Marts
+    Marts --> Metabase
     Files -. "direct query" .-> DuckDB
     ObjectStorage -. "direct query" .-> DuckDB
 ```
@@ -100,7 +106,9 @@ flowchart LR
 Dagster creates one ingestion asset for every enabled source. dlt performs
 extraction, schema inference, normalization, pipeline-state management, and
 loading. dbt builds tested staging models and marts in ClickHouse. DuckDB is
-used for lightweight local and S3 exploration.
+used for lightweight local and S3 exploration. The optional Metabase profile
+serves governed dashboards from the ClickHouse marts through a dedicated
+read-only account.
 
 ## Technology stack
 
@@ -111,6 +119,7 @@ used for lightweight local and S3 exploration.
 | Warehouse | [ClickHouse](https://clickhouse.com/) | Columnar analytical storage and query execution |
 | Transformation | [dbt](https://www.getdbt.com/) | SQL models, dependencies, documentation, data tests |
 | File analytics | [DuckDB](https://duckdb.org/) | Embedded CSV, JSON, Parquet, and S3 queries |
+| Business intelligence | [Metabase](https://www.metabase.com/) | Self-service questions, dashboards, and visualizations |
 | Local runtime | [Docker Compose](https://docs.docker.com/compose/) | Reproducible multi-service development environment |
 | Cloud infrastructure | [Terraform](https://developer.hashicorp.com/terraform) | AWS networking, compute, storage, IAM, and secrets |
 | Local object storage | [MinIO](https://min.io/) | S3-compatible development and integration testing |
@@ -136,7 +145,8 @@ extension interface.
 
 - Docker Engine or Docker Desktop with Compose
 - GNU Make
-- Approximately 4 GB of available Docker memory for the complete demo
+- Approximately 4 GB of available Docker memory for the core demo
+- Approximately 8 GB when the optional Metabase profile is running
 
 ### Start the platform
 
@@ -163,6 +173,7 @@ make up
 | Service | URL | Purpose |
 |---|---|---|
 | Dagster | <http://localhost:3000> | Assets, runs, schedules, lineage, logs |
+| Metabase (optional) | <http://localhost:3001> | Questions, dashboards, and visualizations |
 | ClickHouse HTTP | <http://localhost:8123> | Warehouse HTTP endpoint |
 | MinIO console | <http://localhost:9001> | Local S3-compatible storage |
 
@@ -193,6 +204,10 @@ The bundled example materializes:
 |---|---|
 | `make up` | Build and start the standard local platform |
 | `make demo-up` | Also start seeded PostgreSQL and MySQL source systems |
+| `make bi-up` | Start the core platform plus Metabase |
+| `make metabase-provision` | Upsert the ClickHouse connection and starter dashboard |
+| `make bi-logs` | Follow Metabase profile logs |
+| `make bi-smoke` | Check ClickHouse, Dagster, and Metabase health |
 | `make ps` | Show platform service status |
 | `make logs` | Follow service logs |
 | `make ingest` | Materialize all enabled ingestion assets |
@@ -330,6 +345,51 @@ Additional ready-to-run configurations:
 - [`config/sources.demo-minio.yml`](config/sources.demo-minio.yml)
 - [`config/sources.demo-api.yml`](config/sources.demo-api.yml)
 
+## Explore marts with Metabase
+
+Metabase is an optional Compose profile, so the core ingestion and
+transformation platform stays lightweight:
+
+```bash
+make bi-up
+```
+
+Open <http://localhost:3001>, create the first Metabase administrator, and add
+ClickHouse with these container-network settings:
+
+| Setting | Value |
+|---|---|
+| Host | `clickhouse` |
+| Port | `8123` |
+| Database | `analytics` |
+| Username | Value of `METABASE_CLICKHOUSE_USER` |
+| Password | Value of `METABASE_CLICKHOUSE_PASSWORD` |
+
+The profile creates a dedicated ClickHouse user with `SELECT` access only. It
+also stores Metabase's own configuration in a separate persistent PostgreSQL
+database rather than its embedded development database. Change all Metabase
+credentials and generate a fresh encryption key before sharing the instance:
+
+```bash
+openssl rand -base64 32
+```
+
+See the [Metabase operations guide](docs/metabase.md) for setup, security,
+backup, AWS access, and troubleshooting.
+
+After creating the first administrator, set `METABASE_ADMIN_EMAIL` and
+`METABASE_ADMIN_PASSWORD` in the ignored local `.env`, then provision the
+connection and dashboard without storing a session:
+
+```bash
+make metabase-provision
+```
+
+The idempotent provisioner creates a **Portable Data Platform** collection and
+a **Customer Overview** dashboard with four headline metrics, two segment
+breakdowns, a customer-detail table, and a dashboard-wide segment filter. Each
+question is executed once before the command reports success.
+
 ## Deploy to AWS
 
 The Terraform stack provisions a secure, economical single-node deployment:
@@ -342,6 +402,7 @@ The Terraform stack provisions a secure, economical single-node deployment:
 - Private, encrypted, versioned S3 data-lake and artifact bucket
 - Least-privilege instance role for SSM, S3, and one runtime secret
 - Generated service credentials in AWS Secrets Manager
+- Optional Metabase BI profile with its own PostgreSQL application database
 
 ### Deploy
 
@@ -363,9 +424,13 @@ $(terraform output -raw start_session_command)
 
 # Forward Dagster without opening an inbound port.
 $(terraform output -raw dagster_port_forward_command)
+
+# When enable_metabase = true, forward Metabase to local port 3001.
+$(terraform output -raw metabase_port_forward_command)
 ```
 
-Run the port-forward command, then open <http://localhost:3000>.
+Run the relevant port-forward command, then open <http://localhost:3000> for
+Dagster or <http://localhost:3001> for Metabase.
 
 See the [AWS deployment guide](terraform/README.md) for first-boot diagnostics,
 application updates, S3 ingestion, remote-state guidance, backups, and safe
@@ -378,6 +443,7 @@ destruction.
 | Application topology | Docker Compose | The same Docker Compose bundle |
 | Orchestration | Dagster | Dagster |
 | Warehouse | ClickHouse volume | ClickHouse on encrypted EBS |
+| Business intelligence | Optional Metabase profile | Optional Metabase profile |
 | Object storage | MinIO | Private, versioned S3 |
 | Runtime secrets | Local `.env` | Secrets Manager fetched at first boot |
 | Cloud credentials | Optional local values | EC2 instance role |
@@ -391,6 +457,8 @@ destruction.
 - EC2 requires IMDSv2 with a hop limit that supports containers.
 - AWS credentials come from the instance role, never Terraform user data.
 - Runtime service credentials are retrieved from Secrets Manager.
+- Metabase connects to ClickHouse through a dedicated read-only user.
+- Metabase connection details are encrypted with a separate generated key.
 - EBS and S3 are encrypted.
 - S3 public access is blocked and versioning is enabled.
 - The Terraform bucket defaults to `force_destroy = false`.
@@ -423,7 +491,7 @@ StarRocks is **not included in the current Compose or Terraform deployment**.
 ├── data/inbox/             # CSV, JSON, and generated Parquet examples
 ├── dbt/                    # ClickHouse models, sources, tests, and profiles
 ├── docs/                   # Connector and deployment documentation
-├── infra/                  # MinIO and seeded database initialization
+├── infra/                  # ClickHouse, MinIO, and demo initialization
 ├── scripts/                # Demo generation, validation, and smoke tests
 ├── src/data_platform/      # Connector registry, Dagster assets, DuckDB CLI
 ├── terraform/              # Complete AWS infrastructure and bootstrap
@@ -446,6 +514,7 @@ path:
 - Declarative REST API ingestion
 - 10 successful dbt models and tests
 - DuckDB file queries
+- Metabase health, PostgreSQL persistence, and read-only ClickHouse grants
 - Docker Compose health and smoke checks
 - Terraform formatting and validation
 
@@ -460,6 +529,7 @@ make lint
 make validate
 make terraform-validate
 sh scripts/smoke_test.sh
+make bi-smoke
 ```
 
 ## Production boundaries
@@ -470,6 +540,7 @@ high-availability cluster.
 Before storing business-critical data, add:
 
 - Automated ClickHouse backups and tested restores
+- Metabase application-database backups and restore tests
 - CloudWatch or Prometheus monitoring and alerting
 - TLS through an authenticated proxy or load balancer
 - Recovery objectives and incident procedures
@@ -492,7 +563,7 @@ pricing all contribute to the actual bill.
 - [ ] Automated ClickHouse backups and restore verification
 - [ ] Metrics, dashboards, and alerting
 - [ ] GitHub Actions validation workflow
-- [ ] Optional semantic or BI serving layer
+- [x] Optional Metabase BI serving layer
 
 ## Contributing
 

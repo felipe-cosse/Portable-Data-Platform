@@ -23,6 +23,23 @@ terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
+The example variables enable Metabase on `t4g.large`. For the lower-cost core
+stack without BI, set `enable_metabase = false` and
+`instance_type = "t4g.medium"`.
+
+Set the choice before the first apply. The instance deliberately does not
+replace itself when user data changes, because replacement would also replace
+the root-volume data. To enable Metabase on an existing instance, open an SSM
+shell and add a systemd override:
+
+```ini
+[Service]
+Environment="COMPOSE_PROFILES=bi"
+```
+
+Run `sudo systemctl edit data-platform`, save the override, then run
+`sudo systemctl daemon-reload && sudo systemctl restart data-platform`.
+
 The local Terraform state contains generated passwords because it creates the
 Secrets Manager value. Treat state as sensitive. Before team or production
 use, configure the encrypted remote backend shown in `backend.tf.example`.
@@ -43,6 +60,15 @@ $(terraform output -raw dagster_port_forward_command)
 
 Then open <http://localhost:3000>. ClickHouse can be forwarded similarly by
 changing the SSM document parameters to remote/local port `8123`.
+
+When `enable_metabase = true`, forward Metabase to local port 3001:
+
+```bash
+$(terraform output -raw metabase_port_forward_command)
+```
+
+Then open <http://localhost:3001>. The security group still has no inbound
+rules; the connection is carried by Systems Manager.
 
 First boot builds Python dependencies and may take several minutes. Diagnose
 it from a Session Manager shell:
@@ -80,11 +106,12 @@ sudo -i
 cd /opt/data-platform
 aws s3 cp "s3://$(awk -F= '/^DATA_LAKE_BUCKET=/{print $2}' .env)/artifacts/platform-bundle.zip" /tmp/platform-bundle.zip
 unzip -oq /tmp/platform-bundle.zip -d /opt/data-platform
-docker compose --env-file .env up -d --build
+systemctl restart data-platform
 ```
 
-The command keeps Docker volumes and therefore ClickHouse/Dagster data in
-place. Test updates in a non-production environment first.
+The systemd unit preserves the configured Compose profiles and Docker volumes,
+so ClickHouse, Dagster, and Metabase data remain in place. Test updates in a
+non-production environment first.
 
 ## Configure external database/API secrets
 
@@ -99,16 +126,19 @@ add only its ARN to the instance role.
 
 ## Sizing and persistence
 
-The default `t4g.medium` is a minimum practical starting point for a demo or
-light workload. It uses Arm64 images and standard T-instance CPU credits. Move
-to a fixed-performance M or memory-optimized R instance when ClickHouse has
-sustained CPU or memory demand; set `cpu_credits = null` for non-T families and
-keep `architecture` aligned with the instance type.
+The default `t4g.medium` is a minimum practical starting point for a core demo
+or light workload. Enable Metabase on an instance with at least 8 GiB of
+memory, such as `t4g.large`; the example reserves a 1 GiB Java heap while
+leaving memory for ClickHouse, PostgreSQL, Dagster, and the operating system.
+Move to a fixed-performance M or memory-optimized R instance when ClickHouse
+has sustained CPU or memory demand. Set `cpu_credits = null` for non-T families
+and keep `architecture` aligned with the instance type.
 
-ClickHouse and Dagster volumes live on the encrypted root EBS volume. They
-survive reboots and stop/start, but not instance replacement or Terraform
-destroy. Establish snapshots/ClickHouse backups and restore tests before
-placing important data on this deployment.
+ClickHouse, Dagster, and Metabase PostgreSQL volumes live on the encrypted root
+EBS volume. They survive reboots and stop/start, but not instance replacement
+or Terraform destroy. Establish snapshots, database backups, and restore tests
+before placing important data on this deployment. Protect the Metabase
+encryption key alongside its database backup.
 
 The S3 bucket is encrypted, versioned, non-public, and protected from accidental
 Terraform deletion by `bucket_force_destroy = false`.

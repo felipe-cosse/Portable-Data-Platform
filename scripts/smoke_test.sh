@@ -18,3 +18,9 @@ curl --fail --silent --show-error http://127.0.0.1:3000/server_info >/dev/null
 
 echo
 echo "ClickHouse and Dagster are responding."
+
+if [ "${CHECK_METABASE:-0}" = "1" ]; then
+  curl --fail --silent --show-error \
+    http://127.0.0.1:3001/api/health >/dev/null
+  echo "Metabase is responding."
+fi

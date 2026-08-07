@@ -61,6 +61,13 @@ jq -r --arg bucket "$${ARTIFACT_BUCKET}" --arg region "$${AWS_REGION}" '
     "DAGSTER_PG_DB=\(.dagster_pg_database)",
     "DAGSTER_PG_USER=\(.dagster_pg_user)",
     "DAGSTER_PG_PASSWORD=\(.dagster_pg_password)",
+    "METABASE_PG_DB=\(.metabase_pg_database)",
+    "METABASE_PG_USER=\(.metabase_pg_user)",
+    "METABASE_PG_PASSWORD=\(.metabase_pg_password)",
+    "METABASE_CLICKHOUSE_USER=\(.metabase_clickhouse_user)",
+    "METABASE_CLICKHOUSE_PASSWORD=\(.metabase_clickhouse_password)",
+    "METABASE_ENCRYPTION_SECRET_KEY=\(.metabase_encryption_key)",
+    "METABASE_JAVA_HEAP=1g",
     "SOURCE_POSTGRES_URL=\(.source_postgres_url)",
     "SOURCE_MYSQL_URL=\(.source_mysql_url)",
     "EXAMPLE_API_TOKEN=\(.example_api_token)",
@@ -88,6 +95,7 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/data-platform
+Environment="COMPOSE_PROFILES=${compose_profiles}"
 ExecStart=/usr/bin/docker compose --env-file .env up -d --build
 ExecStop=/usr/bin/docker compose --env-file .env down
 TimeoutStartSec=1800

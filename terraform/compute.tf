@@ -20,11 +20,12 @@ resource "aws_instance" "platform" {
   monitoring                  = false
 
   user_data = templatefile("${path.module}/templates/user_data.sh.tftpl", {
-    aws_region      = var.aws_region
-    artifact_bucket = aws_s3_bucket.data_lake.id
-    artifact_key    = aws_s3_object.platform_bundle.key
-    compose_version = var.compose_version
-    secret_id       = aws_secretsmanager_secret.platform.id
+    aws_region       = var.aws_region
+    artifact_bucket  = aws_s3_bucket.data_lake.id
+    artifact_key     = aws_s3_object.platform_bundle.key
+    compose_profiles = var.enable_metabase ? "bi" : ""
+    compose_version  = var.compose_version
+    secret_id        = aws_secretsmanager_secret.platform.id
   })
 
   user_data_replace_on_change = false

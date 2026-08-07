@@ -27,9 +27,15 @@ variable "architecture" {
 }
 
 variable "instance_type" {
-  description = "EC2 size. t4g.medium is the minimum practical default for the complete stack."
+  description = "EC2 size. t4g.medium suits the core stack; use at least 8 GiB of memory when enable_metabase is true."
   type        = string
   default     = "t4g.medium"
+}
+
+variable "enable_metabase" {
+  description = "Start the optional Metabase BI profile. Use an instance with at least 8 GiB of memory."
+  type        = bool
+  default     = false
 }
 
 variable "cpu_credits" {

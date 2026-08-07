@@ -125,6 +125,75 @@ services:
       dagster-postgres:
         condition: service_healthy
 
+  metabase-postgres:
+    image: postgres:17-alpine
+    profiles: ["bi"]
+    environment:
+      POSTGRES_DB: ${METABASE_PG_DB:-metabase}
+      POSTGRES_USER: ${METABASE_PG_USER:-metabase}
+      POSTGRES_PASSWORD: ${METABASE_PG_PASSWORD:-CHANGE_ME_metabase_postgres}
+    volumes:
+      - metabase-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks:
+      - data-platform
+    restart: unless-stopped
+
+  metabase-clickhouse-init:
+    image: clickhouse/clickhouse-server:25.8-alpine
+    profiles: ["bi"]
+    entrypoint: ["/bin/sh", "/bootstrap/create-metabase-user.sh"]
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-platform}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-CHANGE_ME_clickhouse}
+      METABASE_CLICKHOUSE_USER: ${METABASE_CLICKHOUSE_USER:-metabase}
+      METABASE_CLICKHOUSE_PASSWORD: ${METABASE_CLICKHOUSE_PASSWORD:-CHANGE_ME_metabase_clickhouse}
+    volumes:
+      - ./infra/clickhouse:/bootstrap:ro
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - data-platform
+    restart: "no"
+
+  metabase:
+    image: metabase/metabase:v0.63.1.12
+    profiles: ["bi"]
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_HOST: metabase-postgres
+      MB_DB_PORT: "5432"
+      MB_DB_DBNAME: ${METABASE_PG_DB:-metabase}
+      MB_DB_USER: ${METABASE_PG_USER:-metabase}
+      MB_DB_PASS: ${METABASE_PG_PASSWORD:-CHANGE_ME_metabase_postgres}
+      MB_ENCRYPTION_SECRET_KEY: ${METABASE_ENCRYPTION_SECRET_KEY:-Q0hBTkdFX01FX21ldGFiYXNlX2VuY3J5cHRpb25fa2V5}
+      MB_SITE_NAME: Portable Data Platform
+      MB_ANON_TRACKING_ENABLED: "false"
+      MB_LOAD_SAMPLE_CONTENT: "false"
+      JAVA_OPTS: -Xmx${METABASE_JAVA_HEAP:-1g}
+    ports:
+      - "127.0.0.1:3001:3000"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+    depends_on:
+      metabase-postgres:
+        condition: service_healthy
+      metabase-clickhouse-init:
+        condition: service_completed_successfully
+    networks:
+      - data-platform
+    restart: unless-stopped
+
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     command: server /data --console-address ":9001"
@@ -208,6 +277,7 @@ volumes:
   clickhouse-data:
   clickhouse-logs:
   dagster-postgres-data:
+  metabase-postgres-data:
   dagster-storage:
   dbt-logs:
   dbt-target:
