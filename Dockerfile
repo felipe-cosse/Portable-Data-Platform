@@ -19,6 +19,7 @@ COPY src ./src
 RUN pip install --no-deps .
 
 COPY config ./config
+COPY .env.example docker-compose.yml ./
 COPY dagster ./dagster
 COPY dbt ./dbt
 COPY scripts ./scripts

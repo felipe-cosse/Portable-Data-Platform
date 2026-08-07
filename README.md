@@ -159,12 +159,14 @@ make up
 `make up` performs the complete local bootstrap:
 
 1. Copies `.env.example` to `.env` when needed.
-2. Builds the shared Python runtime.
-3. Generates a real Parquet demonstration file.
-4. Starts ClickHouse, Dagster, Dagster's PostgreSQL metadata database, and MinIO.
+2. Generates a private Metabase encryption key in the ignored `.env` file.
+3. Builds the shared Python runtime.
+4. Generates a real Parquet demonstration file.
+5. Starts ClickHouse, Dagster, Dagster's PostgreSQL metadata database, and MinIO.
 
 > [!IMPORTANT]
 > Replace every `CHANGE_ME` value in `.env` before connecting non-demo data.
+> Never commit `.env` or copy its generated encryption key into a tracked file.
 > Published ports bind to `127.0.0.1`, so they are not exposed to the local
 > network by default.
 

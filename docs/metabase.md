@@ -25,14 +25,11 @@ Copy the environment template if the platform has not been bootstrapped:
 make bootstrap
 ```
 
-Replace the Metabase password placeholders in `.env`, then generate a key for
-encrypting saved database credentials:
-
-```bash
-openssl rand -base64 32
-```
-
-Set the result as `METABASE_ENCRYPTION_SECRET_KEY` and start the BI profile:
+`make bootstrap` generates a private `METABASE_ENCRYPTION_SECRET_KEY` in the
+ignored `.env` file when one is missing. Never copy that generated value into
+`.env.example`, Compose configuration, documentation, or another tracked file.
+Replace the remaining Metabase password placeholders in `.env`, then start the
+BI profile:
 
 ```bash
 make bi-up
@@ -141,6 +138,8 @@ sudo docker compose --env-file .env --profile bi run --rm \
 - Replace every local `CHANGE_ME` value before using real data.
 - Keep `METABASE_ENCRYPTION_SECRET_KEY` stable and backed up securely. Losing
   it prevents Metabase from decrypting stored connection details.
+- Never place a generated encryption key in `.env.example` or
+  `docker-compose.yml`; `make bootstrap` stores it only in ignored `.env`.
 - Use the generated `metabase` ClickHouse account, not the platform ingestion
   account.
 - Give Metabase groups access only to the databases, schemas, and collections

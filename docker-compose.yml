@@ -172,7 +172,7 @@ services:
       MB_DB_DBNAME: ${METABASE_PG_DB:-metabase}
       MB_DB_USER: ${METABASE_PG_USER:-metabase}
       MB_DB_PASS: ${METABASE_PG_PASSWORD:-CHANGE_ME_metabase_postgres}
-      MB_ENCRYPTION_SECRET_KEY: ${METABASE_ENCRYPTION_SECRET_KEY:-Q0hBTkdFX01FX21ldGFiYXNlX2VuY3J5cHRpb25fa2V5}
+      MB_ENCRYPTION_SECRET_KEY: ${METABASE_ENCRYPTION_SECRET_KEY:?Run make bootstrap to generate the local Metabase encryption key}
       MB_SITE_NAME: Portable Data Platform
       MB_ANON_TRACKING_ENABLED: "false"
       MB_LOAD_SAMPLE_CONTENT: "false"

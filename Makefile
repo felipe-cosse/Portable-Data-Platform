@@ -5,6 +5,16 @@ COMPOSE := docker compose --env-file .env
 
 bootstrap:
 	@test -f .env || cp .env.example .env
+	@if ! awk -F= '$$1 == "METABASE_ENCRYPTION_SECRET_KEY" && length($$2) >= 16 { found=1 } END { exit !found }' .env; then \
+		generated_key="$$(openssl rand -base64 32)"; \
+		env_tmp="$$(mktemp)"; \
+		awk -v replacement="$$generated_key" \
+			'/^METABASE_ENCRYPTION_SECRET_KEY=/ { print "METABASE_ENCRYPTION_SECRET_KEY=" replacement; next } { print }' \
+			.env > "$$env_tmp"; \
+		chmod 600 "$$env_tmp"; \
+		mv "$$env_tmp" .env; \
+		printf '%s\n' 'Generated a private Metabase encryption key in .env'; \
+	fi
 
 demo-data:
 	@docker run --rm \
