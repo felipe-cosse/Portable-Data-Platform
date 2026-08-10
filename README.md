@@ -67,6 +67,14 @@ tested analytical models:
 
 ## Architecture
 
+<p align="center">
+  <img
+    src="docs/assets/portable-data-platform-architecture.png"
+    alt="Portable Data Platform architecture showing data sources, Dagster and dlt orchestration, ClickHouse and dbt analytics, DuckDB queries, Metabase dashboards, and local or AWS deployment"
+    width="100%"
+  />
+</p>
+
 ```mermaid
 flowchart LR
     subgraph Sources["Data sources"]
