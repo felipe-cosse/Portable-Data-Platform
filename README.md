@@ -486,12 +486,6 @@ ClickHouse is the implemented and fully tested warehouse backend. It fits the
 current append-oriented, low-operations, single-node design and has a
 first-party dlt destination.
 
-StarRocks can be added later as a complementary analytical backend for
-primary-key updates, CDC, join-heavy BI workloads, or lakehouse catalogs. The
-recommended dual-warehouse design is to land canonical Parquet in S3 or MinIO
-once, then create separate Dagster assets and dbt targets for each warehouse.
-StarRocks is **not included in the current Compose or Terraform deployment**.
-
 ## Project structure
 
 ```text
@@ -561,10 +555,6 @@ Before storing business-critical data, add:
 The default EC2 instance is intended for demonstration and light workloads.
 Benchmark representative ingestion, transformations, query concurrency, and
 retention before selecting production infrastructure.
-
-The `$20/month` claim that inspired the project is not a cost guarantee. EC2,
-EBS, public IPv4, Secrets Manager, S3, data transfer, backups, and regional
-pricing all contribute to the actual bill.
 
 ## Roadmap
 
